@@ -1,0 +1,26 @@
+import jieba
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.naive_bayes import MultinomialNB  # 朴素贝叶斯
+dataset = pd.read_csv("dataset.csv", sep="\t", header=None, nrows=100)
+
+# 2. 中文分词
+input_sententce = dataset[0].apply(lambda x: " ".join(jieba.lcut(x)))
+
+# 3. 特征提取
+vector = CountVectorizer()
+vector.fit(input_sententce.values)
+input_feature = vector.transform(input_sententce.values)
+
+# 4. 训练朴素贝叶斯模型
+model_nb = MultinomialNB()
+model_nb.fit(input_feature, dataset[1].values)
+print("训练好的朴素贝叶斯模型:", model_nb)
+
+
+test_txt = "单曲循环一首催眠的歌吧"
+test_sentence = " ".join(jieba.lcut(test_txt))
+test_feature = vector.transform([test_sentence])
+
+print("待预测的文本:", test_txt)
+print ("朴素贝叶斯预测内容:", model_nb.predict(test_feature))

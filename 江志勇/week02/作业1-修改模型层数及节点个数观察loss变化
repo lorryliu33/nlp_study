@@ -1,0 +1,125 @@
+# _*_ coding : utf-8 _*_
+# @Time : 2026/1/19 15:55
+# @Author : MR.江
+# @File : 深度学习_文本分类_学习
+# @Project : nlp20
+import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+# 读取文本
+dataset = pd.read_csv("dataset.csv", sep="\t", header=None)
+texts = dataset[0].tolist()
+string_labels = dataset[1].tolist()  # ['Travel-Query', 'Travel-Query', 'Music-Play']
+# 对string_labelqs使用集合去重并对不重复标签添加索引,enumerate将可遍历数据对象，返回数据下标和数据
+label_to_index = {label:i for i, label in enumerate(set(string_labels))}  # {'Travel-Query': 0, 'Music-Play': 1}
+# 将string_label中的所有label的索引输出为列表
+num_labels = [label_to_index[label] for label in string_labels]  # [0, 0, 1]
+
+# 将文本转换成编码
+char_to_index = {'<pad>': 0}
+for text in texts:  # 还有双鸭山到淮阴的汽车票吗13号的
+    for char in text:
+        if char not in char_to_index:
+            char_to_index[char] = len(char_to_index)  # {'<pad>': 0, '还': 1, '有': 2, '双': 3, '鸭': 4, '山': 5, '到': 6, '淮': 7, '阴': 8, '的': 9, '汽': 10}
+index_to_char = {i: char for char, i in char_to_index.items()}  # {0: '<pad>', 1: '还', 2: '有', 3: '双', 4: '鸭', 5: '山'}...
+vocab_size = len(char_to_index)  # 所有词组长度
+max_len = 40
+# bow_vector = torch.zeros(vocab_size)  # 初始化，所有词组长度的全0 tensor张量
+class CharBowDataset(Dataset):
+    def __init__(self, texts, labels, char_to_index, max_len, vocab_size):
+        self.texts = texts
+        self.labels = torch.tensor(labels, dtype=torch.long)
+        self.char_to_index = char_to_index
+        self.max_len = max_len
+        self.vocab_size = vocab_size
+        self.bow_vectors = self._create_bow_vectors()
+
+    def _create_bow_vectors(self):
+        tokenized_texts = []
+        for text in self.texts:
+            # get获取char对应的编号值，若char不存在则返回默认的0
+            tokenized = [self.char_to_index.get(char,0) for char in text[:self.max_len]]  # 将文本转换成编码
+            # 列表长度小雨max_len，则用0补齐，取长补短，将所有句子统一长度
+            tokenized += [0] * (self.max_len -len(tokenized))
+            tokenized_texts.append(tokenized)
+        bow_vectors = []
+        for text_indices in tokenized_texts:
+            bow_vector = torch.zeros(self.vocab_size)
+            for index in text_indices:
+                if index != 0:
+                    bow_vector[index] += 1  # 将tokenized_texts转换成0，1的编码
+            bow_vectors.append(bow_vector)
+        return torch.stack(bow_vectors)  # 将列表堆叠为向量
+    def __len__(self):
+        return len(self.texts)
+    def __getitem__(self, idx):
+        return self.bow_vectors[idx], self.labels[idx]
+
+class SimpleClassifier(nn.Module):
+    def __init__(self, input_dim, hidden_dim, hidden_dim2, output_dim):  # 层的个数和验证集精度
+        # 层初始化
+        super(SimpleClassifier, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)  # input_dim输入维度，hidden_dim隐藏层输出维度（下一个的输入维度）
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim2)
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(hidden_dim2, output_dim)
+    def forward(self, x):
+        # 手动实现每层计算
+        out = self.fc1(x)
+        out = self.relu(out)
+        out = self.fc2(out)
+        out = self.relu2(out)
+        out = self.fc3(out)
+        return out
+char_dataset = CharBowDataset(texts, num_labels, char_to_index, max_len, vocab_size)
+dataloader = DataLoader(char_dataset, batch_size=32, shuffle=True)  # 读取批量数据集，batch数据，shuffle打乱数据
+print("dataloader内容为", dataloader)
+
+hidden_dim = 64
+hidden_dim2 = 128
+output_dim = len(label_to_index)
+model = SimpleClassifier(vocab_size, hidden_dim, hidden_dim2, output_dim)
+criterion = nn.CrossEntropyLoss()  # 交叉熵损失函数，内部自带激活函数softmax（归一化处理）
+optimizer = optim.SGD(model.parameters(), lr=0.01)
+
+num_epochs = 10
+for epoch in range(num_epochs):
+    model.train()
+    for index, (inputs, labels) in enumerate(dataloader):
+        optimizer.zero_grad()  # 梯度归零
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)  # 求loss
+        loss.backward()  # 梯度下降
+        optimizer.step()  # 更新权重
+        if index % 50 == 0:
+            print(f"Batch个数：{index}, 当前Batch loss：{loss.item()}")
+
+def classify_text(text, model, char_to_index, vocab_size, max_len, index_to_label):
+    tokenized = [char_to_index.get(char, 0) for char in text[:max_len]]
+    tokenized += [0] * (max_len - len(tokenized))
+    bow_vector = torch.zeros(vocab_size)
+    for index in tokenized:
+        if index != 0:
+            bow_vector[index] += 1
+    # unsqueeze对维度进行扩充，例如：原本是3个数据，在0维加上一个维度变成1行，3列
+    bow_vector = bow_vector.unsqueeze(0)
+    model.eval()
+    with torch.no_grad():
+        output = model(bow_vector)
+        print("output为", output)
+    # _用于忽略不需要的返回值，0是列，1是行，在行上取最大值并只返回索引序号
+    print("torch.max返回值", torch.max(output, 1))  # torch.return_types.max(values=tensor([1.6888]),indices=tensor([6]))
+    _, predicted_index = torch.max(output, 1)
+    # item将pytorch张量转换为python标量
+    predicted_index = predicted_index.item()
+    predicted_label = index_to_label[predicted_index]
+    return predicted_label
+index_to_label = {i: label for label, i in label_to_index.items()}
+new_text = "帮我导航到江西"
+predicted_class = classify_text(new_text, model, char_to_index, vocab_size, max_len, index_to_label)
+print(f"输入 '{new_text}' 预测为: '{predicted_class}'")
+
+

@@ -1,0 +1,84 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import matplotlib.pyplot as plt
+
+x_numpy = np.random.rand(100, 1) * 10
+y_sin_numpy = np.sin(x_numpy)+1
+x_torch = torch.from_numpy(x_numpy).float()
+y_torch = torch.from_numpy(y_sin_numpy).float()
+print(y_torch.shape)
+
+
+
+class SinNet(nn.Module):
+    def __init__(self, input_size, hidden_size,hedden_size1, output_size):
+        super(SinNet, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, hedden_size1)
+        self.relu = nn.ReLU()
+        self.fc3 = nn.Linear(hedden_size1, output_size)
+    def forward(self, x):
+        out = self.fc1(x)
+        out = self.relu(out)
+        out = self.fc2(out)
+        out = self.relu(out)
+        out = self.fc3(out)
+        return out
+
+
+model = SinNet(1, 10,20, 1)
+print("模型结构:\n", model)
+print("\n模型参数:")
+for name, param in model.named_parameters():
+    print(f"{name}: {param.shape}")
+loss_func = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)  # 使用Adam优化器，学习率0.01
+# 如果你坚持要用SGD，可以使用 momentum
+# optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+
+# 4. 训练模型
+epochs = 500  # 增加训练轮数
+losses = []  # 记录损失
+model.train() #显示训练，默认是开启的
+print("\n开始训练...")
+for epoch in range(epochs):
+    # 前向传播
+    predictions = model(x_torch)  # predictions预测值
+    # 计算损失
+    loss = loss_func(predictions, y_torch) #预测值和真实值进行比较
+    # 反向传播
+    optimizer.zero_grad()  # 清空梯度
+    loss.backward()  # 计算梯度
+    optimizer.step()  # 更新参数
+    # 记录损失
+    losses.append(loss.item())
+    # 每50轮打印一次损失
+    if (epoch + 1) % 50 == 0:
+        print(f'Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.6f}')
+
+# 5. 评估模型
+model.eval()  # 切换到评估模式
+
+with torch.no_grad():
+    y_pred = model(x_torch).numpy()
+
+plt.figure(figsize=(10, 12))
+# 子图1：Loss变化曲线
+plt.subplot(2, 1, 1)
+plt.plot(range(epochs), losses, color='blue', linewidth=1)
+plt.xlabel('Epoch')
+plt.ylabel('MSE Loss')
+plt.title('LossChange')
+plt.grid(True, alpha=0.3)
+
+plt.subplot(2, 1, 2)
+plt.scatter(x_numpy, y_sin_numpy, label='True sin(x)', alpha=0.6)
+plt.scatter(x_numpy, y_pred, label='Predicted', alpha=0.6)
+plt.xlabel('X')
+plt.ylabel('y')
+plt.legend()
+plt.grid(True)
+plt.title('Sin Function Fitting')
+plt.show()

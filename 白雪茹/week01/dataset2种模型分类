@@ -1,0 +1,74 @@
+from typing import Union
+import pandas as pd
+import jieba
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer#词频统计
+from sklearn.neighbors import KNeighborsClassifier
+import os
+# pip install openai
+from openai import OpenAI
+from fastapi import FastAPI
+
+app = FastAPI()
+
+
+#训练knn模型 训练模型先jieba再countvectorizer（内含fit统计词表和transform词表转换为向量）再knn
+dataset = pd.read_csv("dataset.csv", sep="\t", header=None, nrows=100)
+input_sententce = dataset[0].apply(lambda x: " ".join(jieba.lcut(x))) # sklearn对中文处理
+vector = CountVectorizer() # 对文本进行提取特征 默认是使用标点符号分词
+vector.fit(input_sententce.values)#1统计词表
+input_feature = vector.transform(input_sententce.values)#2词表转换为向量，100*词表大小=100*348（文本包含多少个不重复的单词）
+model = KNeighborsClassifier()
+model.fit(input_feature, dataset[1].values)
+
+#实际使用knn时，只需把新的text用jieba再transform并直接调用model即可，无需counvectorizer.fit
+@app.get("/text-cls/ml")
+def text_classify_using_ml(text:str) -> str:
+    """
+    使用机器学习模型对文本进行分类。
+    """
+    test_sentence = " ".join(jieba.lcut(text))
+    test_feature = vector.transform([test_sentence])
+    return model.predict(test_feature)[0]
+    #pandas图表
+    #numpy矩阵运算
+
+client = OpenAI(
+    # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",
+    # https://bailian.console.aliyun.com/?tab=model#/api-key
+    api_key="sk-b3815db8149b4107a4073d448a178182", # 账号绑定的
+
+    # 大模型厂商的地址
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+
+
+@app.get("/text-cls/llm")
+#不需要训练，不需要训练集，直接调用
+def text_classify_using_llm(text:str) -> str:
+    """
+    使用大语言模型对文本进行分类。
+    """
+    completion = client.chat.completions.create(
+    # 模型列表：https://help.aliyun.com/zh/model-studio/getting-started/models
+    model="qwen-plus", # 模型的代号
+
+    messages=[
+        {"role": "user", "content": f"""帮我进行文本分类:{text}
+        输出类别只能从如下进行选择：
+        'Travel-Query', 'Alarm-Update', 'HomeAppliance-Control', 'Radio-Listen', 'Music-Play', 'FilmTele-Play', 'Video-Play', 'Weather-Query', 'Calendar-Query' """}  # 用户的提问,  # 用户的提问
+        ]
+    )
+    return completion.choices[0].message.content
+
+# 可加可不加，不加就用fastapi run name.py;加就用python name.py
+if __name__ == "__main__":
+    import uvicorn
+    #允许所有网络接口（本机+局域网+外网）访问
+    uvicorn.run("fastapi_demo:app", host="0.0.0.0", port=8000, reload=True)
+    #仅本机访问，更安全
+    #uvicorn app:app --host 127.0.0.1 --port 8000
+    #print("数据集的样本维度：", data.shape)
+    #print(jieba.lcut("我来到北京清华大学"))#分词 word segment
+    #print(text_classify_using_ml("帮我播放一下郭德纲的小品"))
+    #print(text_classify_using_llm("帮我导航到北京"))

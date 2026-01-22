@@ -1,0 +1,51 @@
+import pandas as pd
+import jieba  # 分词
+from sklearn.feature_extraction.text import CountVectorizer  # 词频统计
+from sklearn.neighbors import  KNeighborsClassifier  # KNN
+from openai import  OpenAI
+
+dataset = pd.read_csv("dataset.csv", sep="\t", header=None, nrows=10000)
+input_sentence = dataset[0].apply(lambda x: " ".join(jieba.lcut(x)))  # 分词
+print(input_sentence.head(5))
+vector = CountVectorizer()
+vector.fit(input_sentence.values)  # 统计词表
+input_feature = vector.transform(input_sentence.values)  # 转换成向量
+
+model = KNeighborsClassifier()
+model.fit(input_feature, dataset[1].values)  # 模型训练
+def text_classify_using_ml(text):
+    """
+    文本分类（机器学习）
+    """
+    test_sentence = " ".join(jieba.lcut(text))
+    test_feature = vector.transform(test_sentence.values)
+    return model.predict(test_feature)[0]
+
+client = OpenAI(api_key="*******", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+
+def text_classify_using_llm(text):
+    """文本分类（大语言模型）"""
+    completion = client.chat.completions.create(
+        model="qwen-plus",
+        messages=[
+            {"role": "user", "content": f"""帮我进行文本分类：{text}
+                    输出的类别只能从如下中进行选择：
+                    FilmTele-Play           
+                    Video-Play             
+                    Music-Play               
+                    Radio-Listen             
+                    Alarm-Update             
+                    Travel-Query             
+                    HomeAppliance-Control    
+                    Weather-Query            
+                    Calendar-Query           
+                    TVProgram-Play            
+                    Audio-Play                
+                    Other    """},
+        ]
+        )
+    return completion.choices[0].message.content
+
+if __name__ == "__main__":
+    print("机器学习：", text_classify_using_ml("帮我导航到天安门"))
+    print("大语言模型：", text_classify_using_llm("帮我导航到天安门"))

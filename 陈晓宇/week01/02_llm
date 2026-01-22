@@ -1,0 +1,38 @@
+from openai import OpenAI
+import  pandas as pd
+
+#  加载数据
+df = pd.read_csv("dataset.csv", sep="\t", header=None, nrows=100)
+df.columns = ['text', 'label']
+unique_labels = sorted(df['label'].dropna().unique().tolist())  # 去重、去空值、排序
+categories = "、".join(unique_labels)
+
+print(f"发现 {len(unique_labels)} 个类别: {categories}")
+
+text_to_classify = df['text'].iloc[12]
+print(f"文本内容:{text_to_classify}")
+client = OpenAI(
+    # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",
+    # https://bailian.console.aliyun.com/?tab=model#/api-key
+    api_key="sk-1b7dfb57a1d94d2b861147193f53a1d1", # 账号绑定的
+
+    # 大模型厂商的地址
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+
+
+completion = client.chat.completions.create(
+    model="qwen-plus",
+    messages=[
+        {
+            "role": "system",
+            "content": f"你是分类助手。严格从这些类别选一个：{categories}。只返回类别名，不要解释。"
+        },
+        {
+            "role": "user",
+            "content": f"请分类以下文本：{text_to_classify}"
+        }
+    ]
+)
+
+print(f"模型预测结果:{completion.choices[0].message.content}")
