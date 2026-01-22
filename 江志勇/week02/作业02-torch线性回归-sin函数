@@ -1,0 +1,73 @@
+# _*_ coding : utf-8 _*_
+# @Time : 2026/1/21 20:54
+# @Author : MR.江
+# @File : torch线性回归-sinx作业
+# @Project : nlp20
+import torch
+import numpy as np
+import torch.nn as nn
+import matplotlib.pyplot as plt
+# 生成数据
+# X_numpy = np.random.rand(100, 1)
+X_numpy = np.random.rand(200, 1) * 4 * np.pi
+y_numpy = np.sin(X_numpy) + np.random.rand(200, 1) * 0.1
+X = torch.from_numpy(X_numpy).float()
+# X = torch.tensor(X_numpy)
+y = torch.from_numpy(y_numpy).float()
+
+class MLP(nn.Module):
+    def __init__(self, input_dim, hidden_dim1, hidden_dim2, output_dim):
+        super(MLP, self).__init__()
+        self.network = nn.Sequential(
+            # 第1层：从input_dim 到 hidden_dim1
+            nn.Linear(input_dim, hidden_dim1),
+            nn.Sigmoid(),
+
+            # 第2层：从hidden_dim1 到hidden_dim2
+            nn.Linear(hidden_dim1, hidden_dim2),
+            nn.ReLU(),
+
+            # 输出层：从hidden_dim2 到 output_dim
+            nn.Linear(hidden_dim2, output_dim)
+        )
+    def forward(self, x):
+        return self.network(x)
+epochs = 1000
+batch_size = 50
+learning_rate = 0.001
+model = MLP(1, 12, 24, 1)
+criterion = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+watch_output = []
+for epoch in range(epochs):
+    model.train()
+    watch_loss = []
+    for batch_index in range(len(X) // batch_size):
+        x = X[batch_index * batch_size : (batch_index+1) * batch_size]
+        Y = y[batch_index * batch_size: (batch_index + 1) * batch_size]
+        optimizer.zero_grad()
+        outputs = model(x)
+        loss = criterion(outputs, Y)
+        loss.backward()
+        optimizer.step()
+        watch_loss.append(loss.item())
+
+    print(f"第{epoch + 1}轮 平均loss为{np.mean(watch_loss)}")
+with torch.no_grad():
+    model.eval()
+    predictions = model(X).numpy()
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_numpy, y_numpy, label ='Raw data', color='blue', alpha=0.6)
+# plt.plot(X_numpy, predictions, label='Model', color='red', linewidth=2)
+plt.scatter(X_numpy, predictions, label='Model', color='red', alpha=1)
+plt.xlabel('X')
+plt.ylabel('y')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
+
+
+
