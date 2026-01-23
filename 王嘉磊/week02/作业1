@@ -1,0 +1,63 @@
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
+
+X_numpy = np.linspace(0, 2 * np.pi, 100).reshape(-1, 1) # 批量训练， 100*1
+y_numpy = np.sin(X_numpy) + np.random.randn(100, 1) / 20
+
+X = torch.from_numpy(X_numpy).float()
+y = torch.from_numpy(y_numpy).float()
+
+
+model = nn.Sequential(
+    nn.Linear(1, 100), # 随机初始化
+    nn.ReLU(),
+    nn.Dropout(0.5),
+    nn.Linear(100, 100),
+    nn.ReLU(),
+    nn.Linear(100, 10),
+    nn.ReLU(),
+    nn.Linear(10, 1),
+)
+
+
+
+
+loss_fn = nn.MSELoss()
+
+
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001) # lr 是学习率
+
+num_epochs = 5000  # 训练迭代次数
+for epoch in range(num_epochs): # 推荐每次epoch之后，原始X 和 label 次序打乱
+
+    y_pred = model(X)
+
+
+    loss = loss_fn(y_pred, y)
+
+
+    optimizer.zero_grad()  # 清空梯度
+    loss.backward()  # 计算梯度
+    optimizer.step()  # 更新参数
+
+
+    if (epoch + 1) % 100 == 0:
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+
+
+model.eval() # 主动关闭dropout
+
+with torch.no_grad():
+    y_predicted = model(X).numpy() # 使用训练好的模型进行预测
+
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_numpy, y_numpy, label='Raw data', color='blue', alpha=0.6)
+plt.plot(X_numpy, y_predicted, label=f'Model', color='red', linewidth=2)
+plt.xlabel('X')
+plt.ylabel('y')
+plt.legend()
+plt.grid(True)
+plt.show()
